@@ -1,0 +1,41 @@
+name: Autonomous AI Agent Execution
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install ccxt pandas google-generativeai
+
+    - name: Run AI Agent
+      env:
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      run: |
+        python agent.py
+
+    - name: Commit and Push Agent Logs
+      run: |
+        git config --global user.name "GitHub Action Agent"
+        git config --global user.email "agent@bot.local"
+        git add agent_log.txt
+        git commit -m "Auto-update agent execution log [skip ci]" || exit 0
+        git push
+        
