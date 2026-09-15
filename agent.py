@@ -1,74 +1,53 @@
 import os
-import ccxt
+import yfinance as yf
 import pandas as pd
 import requests
 import google.generativeai as genai
 
-# 1. التحقق من وجود مفتاح Gemini
+# 1. تهيئة Gemini
 api_key = os.environ.get("GEMINI_API_KEY")
 if not api_key:
     raise ValueError("GEMINI_API_KEY is missing in Secrets!")
 
 genai.configure(api_key=api_key)
+model = genai.GenerativeModel('gemini-1.5-pro')
 
-# قائمة موديلات Gemini بالترتيب (fallback) - لو موديل اتلغى أو مش متاح، بيجرب اللي بعده
-MODEL_CANDIDATES = ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-2.0-flash']
-
-# --- Tool 1: إرسال إشعارات لتليجرام ---
+# --- Tool 1: إرسال إشعارات لتليجرام بدون أخطاء تنسيق ---
 def send_telegram_message(message):
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
     
     if bot_token and chat_id:
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-        payload = {"chat_id": chat_id, "text": message, "parse_mode": "Markdown"}
+        payload = {"chat_id": chat_id, "text": message} # بدون parse_mode لتفادي أخطاء الماركداون
         try:
             res = requests.post(url, json=payload)
-            print(f"Telegram status code: {res.status_code}")
+            print(f"Telegram Status: {res.status_code}")
         except Exception as e:
             print(f"Failed to send Telegram message: {e}")
     else:
-        print("Telegram tokens are missing, skipping notification.")
+        print("Telegram configuration missing.")
 
-# --- Tool 2: جلب البيانات الفنية (محدث لتفادي حظر Binance) ---
-def fetch_advanced_market_data(symbol="BTC/USDT"):
-    exchanges = [
-        ccxt.kucoin({'enableRateLimit': True}),
-        ccxt.bybit({'enableRateLimit': True}),
-        ccxt.kraken({'enableRateLimit': True})
-    ]
+# --- Tool 2: جلب بيانات السوق المضمونة (yfinance) ---
+def fetch_advanced_market_data(symbol="BTC-USD"):
+    ticker = yf.Ticker(symbol)
+    df = ticker.history(period="7d", interval="1h")
     
-    bars = None
-    for ex in exchanges:
-        try:
-            print(f"Attempting to fetch data from {ex.id}...")
-            # تحويل الرمز إذا لزم الأمر مع kraken
-            fetch_symbol = "BTC/USD" if ex.id == 'kraken' and symbol == "BTC/USDT" else symbol
-            bars = ex.fetch_ohlcv(fetch_symbol, timeframe='1h', limit=100)
-            if bars:
-                print(f"Successfully fetched data from {ex.id}!")
-                break
-        except Exception as e:
-            print(f"Failed with {ex.id}: {e}")
-            continue
+    if df.empty:
+        raise RuntimeError("Could not fetch market data from Yahoo Finance!")
 
-    if not bars:
-        raise RuntimeError("Could not fetch market data from any exchange!")
-
-    df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+    df.rename(columns={'Open': 'open', 'High': 'high', 'Low': 'low', 'Close': 'close', 'Volume': 'volume'}, inplace=True)
     
-    # RSI
+    # حساب RSI مع حماية القسمة على صفر
     delta = df['close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
-    rs = gain / loss
+    rs = gain / loss.replace(0, 1e-9)
     df['RSI'] = 100 - (100 / (1 + rs))
     
-    # Moving Averages
+    # المتوسطات والمؤشرات
     df['SMA_20'] = df['close'].rolling(20).mean()
     df['SMA_50'] = df['close'].rolling(50).mean()
-    
-    # MACD
     exp1 = df['close'].ewm(span=12, adjust=False).mean()
     exp2 = df['close'].ewm(span=26, adjust=False).mean()
     df['MACD'] = exp1 - exp2
@@ -84,22 +63,6 @@ def read_agent_memory():
             return "".join(logs[-20:])
     return "بداية سجل جديد."
 
-# --- Tool 4: توليد الرد من Gemini مع fallback بين الموديلات ---
-def generate_with_fallback(prompt):
-    last_error = None
-    for model_name in MODEL_CANDIDATES:
-        try:
-            print(f"Trying Gemini model: {model_name}...")
-            model = genai.GenerativeModel(model_name)
-            response = model.generate_content(prompt)
-            print(f"Successfully generated content with {model_name}!")
-            return response.text
-        except Exception as e:
-            print(f"Failed with {model_name}: {e}")
-            last_error = e
-            continue
-    raise RuntimeError(f"Could not generate content with any Gemini model! Last error: {last_error}")
-
 # --- المحرك الرئيسي ---
 def run_super_agent():
     data = fetch_advanced_market_data()
@@ -112,7 +75,7 @@ def run_super_agent():
     {past_memory}
     
     [بيانات السوق الفنية اللحظية لـ BTC/USDT]:
-    - السعر الحالي: {data['close']}
+    - السعر الحالي: {data['close']:.2f}
     - مؤشر RSI (14): {data['RSI']:.2f}
     - المتوسط المتحرك SMA 20: {data['SMA_20']:.2f}
     - المتوسط المتحرك SMA 50: {data['SMA_50']:.2f}
@@ -125,23 +88,21 @@ def run_super_agent():
     4. التحديث الذاتي للدورة القادمة.
     """
     
-    report = generate_with_fallback(prompt)
+    response = model.generate_content(prompt)
+    report = response.text
     
-    print("=== Advanced Super-Agent Execution Complete ===")
+    print("=== Execution Complete ===")
     print(report)
     
-    # حفظ في الذاكرة
+    # حفظ في الملف المحلي
     with open("agent_log.txt", "a", encoding="utf-8") as f:
-        f.write(f"\n--- [Step Log] Price: {data['close']} | RSI: {data['RSI']:.2f} ---\n" + report + "\n")
+        f.write(f"\n--- [Log Step] Price: {data['close']:.2f} | RSI: {data['RSI']:.2f} ---\n" + report + "\n")
     
-    # إرسال التقرير لتليجرام
-    telegram_text = f"🤖 *Super-Agent Report*\n💰 *Price:* {data['close']}\n📈 *RSI:* {data['RSI']:.2f}\n\n{report}"
-    send_telegram_message(telegram_text[:4000])
+    # إرسال التقرير لتليجرام مجزأ
+    full_text = f"🤖 Super-Agent Report\n💰 Price: {data['close']:.2f}\n📈 RSI: {data['RSI']:.2f}\n\n{report}"
+    for i in range(0, len(full_text), 3900):
+        send_telegram_message(full_text[i:i+3900])
 
 if __name__ == "__main__":
-    try:
-        run_super_agent()
-    except Exception as e:
-        print(f"Agent run failed: {e}")
-        send_telegram_message(f"⚠️ *Super-Agent Failed*\n{e}")
-        raise
+    run_super_agent()
+    
