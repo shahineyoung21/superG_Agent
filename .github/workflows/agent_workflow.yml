@@ -2,15 +2,20 @@ name: Run Super Agent
 
 on:
   schedule:
-    - cron: '0 */6 * * *'  # تشغيل تلقائي كل 6 ساعات
-  workflow_dispatch:       # زر تشغيل يدوي
+    # يشتغل تلقائياً كل 6 ساعات (يمكنك تعديل التوقيت حسب رغبتك)
+    - cron: '0 */6 * * *'
+  workflow_dispatch: # يتيح لك تشغيله يدوياً بضغطة زر من GitHub
 
 jobs:
   run-agent:
     runs-on: ubuntu-latest
+    
+    # إعطاء صلاحية الكتابة للمستودع لحفظ ملف الذاكرة agent_log.txt
+    permissions:
+      contents: write
 
     steps:
-      - name: Check out repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -18,22 +23,22 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install dependencies
+      - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run Python Agent
+      - name: Execute Agent Script
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python agent.py
+        run: |
+          python agent.py
 
-      - name: Commit and Push Memory Log
+      - name: Commit & Push Agent Memory Log
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action Bot"
           git add agent_log.txt
-          git commit -m "Update agent memory log" || exit 0
-          git push
+          git diff --staged --quiet || (git commit -m "Update agent memory [skip ci]" && git push)
