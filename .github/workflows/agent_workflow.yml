@@ -1,42 +1,39 @@
-name: Autonomous AI Agent Execution
+name: Run Super Agent
 
 on:
   schedule:
-    - cron: '0 */6 * * *'
-  push:
-    branches: [ main ]
-  workflow_dispatch:
+    - cron: '0 */6 * * *'  # تشغيل تلقائي كل 6 ساعات
+  workflow_dispatch:       # إمكانية التشغيل اليدوي بنقرة زرار
 
 jobs:
   run-agent:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
 
-    - name: Install Dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install ccxt pandas google-generativeai requests
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install google-generativeai yfinance pandas requests
 
-    - name: Run AI Agent
-      env:
-        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-      run: |
-        python agent.py
+      - name: Run Python Agent
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python agent.py
 
-    - name: Commit and Push Agent Logs
-      run: |
-        git config --global user.name "GitHub Action Agent"
-        git config --global user.email "agent@bot.local"
-        git add agent_log.txt
-        git commit -m "Auto-update agent execution log [skip ci]" || exit 0
-        git push
+      - name: Commit and Push Memory Log
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action Bot"
+          git add agent_log.txt
+          git commit -m "Update agent memory log" || exit 0
+          git push
