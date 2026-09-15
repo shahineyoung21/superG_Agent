@@ -28,10 +28,31 @@ def send_telegram_message(message):
     else:
         print("Telegram tokens are missing, skipping notification.")
 
-# --- Tool 2: جلب البيانات الفنية المتقدمة ---
+# --- Tool 2: جلب البيانات الفنية (محدث لتفادي حظر Binance) ---
 def fetch_advanced_market_data(symbol="BTC/USDT"):
-    exchange = ccxt.binance({'enableRateLimit': True})
-    bars = exchange.fetch_ohlcv(symbol, timeframe='1h', limit=100)
+    exchanges = [
+        ccxt.kucoin({'enableRateLimit': True}),
+        ccxt.bybit({'enableRateLimit': True}),
+        ccxt.kraken({'enableRateLimit': True})
+    ]
+    
+    bars = None
+    for ex in exchanges:
+        try:
+            print(f"Attempting to fetch data from {ex.id}...")
+            # تحويل الرمز إذا لزم الأمر مع kraken
+            fetch_symbol = "BTC/USD" if ex.id == 'kraken' and symbol == "BTC/USDT" else symbol
+            bars = ex.fetch_ohlcv(fetch_symbol, timeframe='1h', limit=100)
+            if bars:
+                print(f"Successfully fetched data from {ex.id}!")
+                break
+        except Exception as e:
+            print(f"Failed with {ex.id}: {e}")
+            continue
+
+    if not bars:
+        raise RuntimeError("Could not fetch market data from any exchange!")
+
     df = pd.DataFrame(bars, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
     
     # RSI
@@ -53,7 +74,7 @@ def fetch_advanced_market_data(symbol="BTC/USDT"):
     
     return df.iloc[-1]
 
-# --- Tool 3: قراءة الذاكرة (مع حماية في حال عدم وجود الملف) ---
+# --- Tool 3: قراءة الذاكرة ---
 def read_agent_memory():
     if os.path.exists("agent_log.txt"):
         with open("agent_log.txt", "r", encoding="utf-8") as f:
