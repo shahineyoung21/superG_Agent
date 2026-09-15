@@ -4,8 +4,12 @@ import pandas as pd
 import requests
 import google.generativeai as genai
 
-# 1. تهيئة النموذج
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+# 1. التحقق من وجود مفتاح Gemini
+api_key = os.environ.get("GEMINI_API_KEY")
+if not api_key:
+    raise ValueError("GEMINI_API_KEY is missing in Secrets!")
+
+genai.configure(api_key=api_key)
 model = genai.GenerativeModel('gemini-1.5-pro')
 
 # --- Tool 1: إرسال إشعارات لتليجرام ---
@@ -17,9 +21,12 @@ def send_telegram_message(message):
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
         payload = {"chat_id": chat_id, "text": message, "parse_mode": "Markdown"}
         try:
-            requests.post(url, json=payload)
+            res = requests.post(url, json=payload)
+            print(f"Telegram status code: {res.status_code}")
         except Exception as e:
             print(f"Failed to send Telegram message: {e}")
+    else:
+        print("Telegram tokens are missing, skipping notification.")
 
 # --- Tool 2: جلب البيانات الفنية المتقدمة ---
 def fetch_advanced_market_data(symbol="BTC/USDT"):
@@ -46,13 +53,13 @@ def fetch_advanced_market_data(symbol="BTC/USDT"):
     
     return df.iloc[-1]
 
-# --- Tool 3: قراءة الذاكرة ---
+# --- Tool 3: قراءة الذاكرة (مع حماية في حال عدم وجود الملف) ---
 def read_agent_memory():
     if os.path.exists("agent_log.txt"):
         with open("agent_log.txt", "r", encoding="utf-8") as f:
             logs = f.readlines()
             return "".join(logs[-20:])
-    return "لا توجد سجلات سابقة."
+    return "بداية سجل جديد."
 
 # --- المحرك الرئيسي ---
 def run_super_agent():
@@ -75,7 +82,7 @@ def run_super_agent():
     قم بتنفيذ التحليل بناءً على سير العمل التالي:
     1. مراجعة الذاكرة والتقييم الذاتي.
     2. التحليل الفني المركب.
-    3. القرار النهائي (شراء / بيع / انتظار) مع تحديد مستويات وقف الخسارة وإدارة المخاطر.
+    3. القرار النهائي (شراء / بيع / انتظار) مع تحديد مستويات وقف الخسارة.
     4. التحديث الذاتي للدورة القادمة.
     """
     
@@ -91,7 +98,7 @@ def run_super_agent():
     
     # إرسال التقرير لتليجرام
     telegram_text = f"🤖 *Super-Agent Report*\n💰 *Price:* {data['close']}\n📈 *RSI:* {data['RSI']:.2f}\n\n{report}"
-    send_telegram_message(telegram_text[:4000]) # تحديد الحد الأقصى للرسالة
+    send_telegram_message(telegram_text[:4000])
 
 if __name__ == "__main__":
     run_super_agent()
