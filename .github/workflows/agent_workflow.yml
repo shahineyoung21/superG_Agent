@@ -3,7 +3,7 @@ name: Run Super Agent
 on:
   schedule:
     - cron: '0 */6 * * *'  # تشغيل تلقائي كل 6 ساعات
-  workflow_dispatch:       # إمكانية التشغيل اليدوي بنقرة زرار
+  workflow_dispatch:       # زر تشغيل يدوي
 
 jobs:
   run-agent:
@@ -21,7 +21,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install google-generativeai yfinance pandas requests
+          pip install -r requirements.txt
 
       - name: Run Python Agent
         env:
