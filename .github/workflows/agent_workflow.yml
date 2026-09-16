@@ -1,34 +1,40 @@
 name: Run Super Agent
-​on:
-schedule:
-- cron: '0 */6 * * *'
-workflow_dispatch:
-​jobs:
-run-agent:
-runs-on: ubuntu-latest
-permissions:
-contents: write
-​steps:
-- name: Checkout Repository
-uses: actions/checkout@v4
-​- name: Set up Python
-uses: actions/setup-python@v5
-with:
-python-version: '3.11'
-​- name: Install Dependencies
-run: |
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-​- name: Execute Agent Script
-env:
-GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-run: |
-python agent.py
-​- name: Commit & Push Agent Memory Log
-run: |
-git config --local user.email "action@github.com"
-git config --local user.name "GitHub Action Bot"
-git add agent_log.txt
-git diff --staged --quiet || (git commit -m "Update agent memory [skip ci]" && git push)
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Execute Agent Script
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python agent.py
+
+      - name: Commit & Push Agent Memory Log
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action Bot"
+          git add agent_log.txt
+          git diff --staged --quiet || (git commit -m "Update agent memory [skip ci]" && git push)
